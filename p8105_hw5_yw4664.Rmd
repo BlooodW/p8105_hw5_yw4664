@@ -127,3 +127,122 @@ sim_p2 |>
 No, the sample average of μ̂ across tests for which the null was rejected is not equal to the true μ, when μ is small.
 
 This happens because only samples with unusually large μ̂ are likely to be significant when the true effect is small.
+
+## Problem 3
+
+### Loading Libraries
+
+```{r, echo=TRUE, results='hide', message=FALSE}
+
+library(tidyverse)
+
+library(ggplot2)
+
+set.seed(1) 
+
+h <- read_csv("data/homicide-data.csv")
+```
+
+### Describe the raw data
+
+```{r}
+
+dim(h)  
+
+names(h) 
+
+h |> summarise(
+  n_cities  = n_distinct(city),
+  n_states  = n_distinct(state),
+  years_min = min(lubridate::year(as.Date(reported_date)), na.rm = TRUE),
+  years_max = max(lubridate::year(as.Date(reported_date)), na.rm = TRUE)
+)
+
+h |> slice_head(n = 5)
+
+```
+
+The data includes 52,179 rows and 12 variables.
+
+Variables include uid, reported_date, victim_last, victim_first, victim_race, victim_age, victim_sex, city, state, lat, lon, and disposition.
+
+Each row is one homicide case in one of 50 cities across 28 states; it includes victim demographics, location, and the case disposition.
+
+### Create city_state and summarize totals and unsolved counts by city
+
+```{r}
+
+h2 <- h |>
+  mutate(
+    city_state = str_c(city, ", ", state),
+    unsolved = disposition %in% c("Closed without arrest", "Open/No arrest")
+  )
+
+by_city <- h2 |>
+  group_by(city_state) |>
+  summarise(
+    n_total    = n(),
+    n_unsolved = sum(unsolved, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+by_city |> slice_head(n = 10)
+
+```
+
+###  prop.test function for the city of Baltimore, MD to estimate the proportion of homicides that are unsolved
+
+```{r}
+
+balt <- h2 %>% filter(city_state == "Baltimore, MD")
+
+balt_test <- prop.test(
+  x = sum(balt$unsolved, na.rm = TRUE),
+  n = nrow(balt)
+)
+
+balt_tidy <- tidy(balt_test) %>%
+  select(estimate, conf.low, conf.high)
+
+balt_tidy
+
+```
+
+### prop.test for every city via a tidy pipeline
+
+```{r}
+
+city_prop <- function(df_city) {
+  tidy(prop.test(
+    x = sum(df_city$unsolved, na.rm = TRUE),
+    n = nrow(df_city)
+  )) |> select(estimate, conf.low, conf.high)
+}
+
+city_est <- h2 |>
+  nest(data = -city_state) |>      
+  mutate(tidy_res = map(data, city_prop)) |>
+  select(-data) |>
+  unnest(tidy_res) |>
+  arrange(estimate) |>
+  mutate(city_state = factor(city_state, levels = city_state))
+
+city_est
+
+```
+
+### Plot estimates and CIs for each city
+
+```{r city-plot, fig.width=8, fig.height=15, dpi=150, out.width='100%'}
+
+ggplot(city_est, aes(x = estimate, y = city_state)) +
+  geom_errorbar(aes(xmin = conf.low, xmax = conf.high), width = 0) +
+  geom_point(size = 2) +
+  labs(
+    title = "Proportion of unsolved homicides (95% CI) by city",
+    x = "Estimated proportion unsolved", y = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.y = element_text(size = 9))
+
+```
