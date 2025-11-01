@@ -58,3 +58,72 @@ The probability rises sharply between roughly 15 and 30 people, crossing the 50 
 
 Beyond about 45 people, the probability approaches 1, implying that in any moderately large group, shared birthdays are almost certain.
 
+## Problem 2
+
+### Loading Libraries
+
+```{r, echo=TRUE, results='hide', message=FALSE}
+
+library(tidyverse)
+
+library(ggplot2)
+
+library(broom)
+
+set.seed(1)
+
+source("power_functions.R")
+
+```
+
+### Simulate 5000 datasets for mu = 0,1,2,3,4,5,6
+
+```{r}
+mu_grid <- 0:6
+B <- 5000
+
+sim_p2 <- map_dfr(mu_grid, ~ bind_rows(replicate(B, power_one_run(.x), simplify = FALSE)))
+
+```
+
+### Plot showing the proportion of times the null was rejected on the y axis and the true value of 𝜇 on the x axis
+
+```{r}
+
+sim_p2 %>%
+  group_by(mu_true) |>
+  summarise(power = mean(reject), .groups = "drop") |>
+  ggplot(aes(mu_true, power)) +
+  geom_line(size = 1) + geom_point(size = 1.3) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(title = "Power vs True μ (n=30, σ=5, α=0.05)", x = "True μ", y = "Power") +
+  theme_minimal(base_size = 13)
+
+
+```
+
+### Plot showing the average estimate of 𝜇̂ on the y axis and the true value of 𝜇 on the x axis and the average estimate of 𝜇̂ only in samples for which the null was rejected on the y axis and the true value of 𝜇 on the x axis.
+
+```{r}
+sim_p2 |>
+  group_by(mu_true) |>
+  summarise(
+    muhat_overall = mean(mu_hat),
+    muhat_condrej = mean(mu_hat[reject]),
+    .groups = "drop"
+  ) |>
+  pivot_longer(-mu_true, names_to = "type", values_to = "avg_muhat") |>
+  mutate(type = recode(type,
+                       muhat_overall = "E[μ̂]",
+                       muhat_condrej = "E[μ̂|reject]")) |>
+  ggplot(aes(mu_true, avg_muhat, color = type)) +
+  geom_line(size = 1) + geom_point(size = 1.3) +
+  labs(title = "Average μ̂ (all vs rejection)",
+       x = "True μ", y = "Average μ̂", color = NULL) +
+  theme_minimal(base_size = 13)
+
+```
+
+No, the sample average of μ̂ across tests for which the null was rejected is not equal to the true μ, when μ is small.
+
+This happens because only samples with unusually large μ̂ are likely to be significant when the true effect is small.
