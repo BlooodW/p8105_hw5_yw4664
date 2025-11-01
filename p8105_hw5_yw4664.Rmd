@@ -44,7 +44,7 @@ sim_results |>
   geom_hline(yintercept = 0.5, linetype = 2) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   labs(
-    title = "Probability of ≥2 people sharing a birthday, 10,000 sims per n",
+    title = "Probability of ≥2 people sharing a birthday, 10,000 sims",
     x = "Group size",
     y = "Estimated probability"
   ) +
